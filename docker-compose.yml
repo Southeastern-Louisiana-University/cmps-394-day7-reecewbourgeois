@@ -1,0 +1,60 @@
+services:
+
+  # ─── PostgreSQL Database ──────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: hello
+    volumes:
+      # Named volume: data persists across container restarts/rebuilds
+      - db_data:/var/lib/postgresql/data
+      # Init script: runs once when the data directory is first created
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    # ports:
+      # - "5432:5432"
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Go API ───────────────────────────────────────────────────────────────
+  api:
+    build: ./api
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_NAME: hello
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    networks:
+      - app_network
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ─── Nginx UI ─────────────────────────────────────────────────────────────
+  ui:
+    build: ./ui
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - app_network
+
+# ─── Named volume ─────────────────────────────────────────────────────────────
+volumes:
+  db_data:
+
+# ─── Custom network ─────────────────────────────────────────────────────────
+networks:
+  app_network:
